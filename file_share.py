@@ -1,12 +1,13 @@
 import os
 import webbrowser
+import qrcode
 from flask import Flask, send_from_directory, render_template_string
 from pyngrok import ngrok
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 # Default shared folder path
-SHARED_FOLDER = r"C:\\Users\\rishi\\OneDrive\\Pictures\\Camera Roll"
+SHARED_FOLDER = r"C:\\Users\\Prince Soni\\Pictures\\Screenshots"
 PORT = 5000
 
 if not os.path.exists(SHARED_FOLDER):
@@ -52,6 +53,10 @@ HTML_TEMPLATE = """
             text-align: center;
             font-weight: bold;
         }
+        .qr-code {
+            text-align: center;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -63,6 +68,10 @@ HTML_TEMPLATE = """
             <div class="card-body">
                 <div class="public-url">
                     Public URL: <a href="{{ public_url }}" target="_blank">{{ public_url }}</a>
+                </div>
+                <div class="qr-code">
+                    <p>Scan QR Code to Access:</p>
+                    <img src="{{ qr_code_url }}" alt="QR Code">
                 </div>
                 <ul class="list-group file-list">
                     {% for file in files %}
@@ -82,11 +91,19 @@ HTML_TEMPLATE = """
 def list_files():
     files = os.listdir(SHARED_FOLDER)
     file_links = [f"/download/{file}" for file in files]
-    return render_template_string(HTML_TEMPLATE, files=file_links, public_url=public_url)
+    return render_template_string(HTML_TEMPLATE, files=file_links, public_url=public_url, qr_code_url="/qr_code")
 
 @app.route("/download/<filename>")
 def download_file(filename):
     return send_from_directory(SHARED_FOLDER, filename, as_attachment=True)
+
+@app.route("/qr_code")
+def serve_qr():
+    return send_from_directory(os.getcwd(), "qr_code.png", as_attachment=False)
+
+def generate_qr_code(url):
+    qr = qrcode.make(url)
+    qr.save("qr_code.png")
 
 def select_folder():
     """Enhanced GUI with customtkinter."""
@@ -104,7 +121,7 @@ def select_folder():
         app.run(port=PORT)
 
     # GUI Setup
-    ctk.set_appearance_mode("dark")  # Light/ Dark Mode
+    ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
 
     root = ctk.CTk()
@@ -130,4 +147,5 @@ def select_folder():
 if __name__ == "__main__":
     public_url = ngrok.connect(PORT).public_url
     print(f"Public URL: {public_url}")
+    generate_qr_code(public_url)
     select_folder()
