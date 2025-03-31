@@ -6,6 +6,7 @@ from pyngrok import ngrok
 import customtkinter as ctk
 from tkinter import filedialog
 from PIL import Image, ImageTk
+import threading  
 
 # Flask app setup
 app = Flask(__name__)
@@ -93,10 +94,30 @@ HTML_TEMPLATE = """
 @app.route("/")
 def file_page():
     if is_folder:
+        global public_url  # Ensure we use the latest public URL
+
+    # Fetch the latest ngrok public URL dynamically
+    try:
+        public_url = ngrok.get_tunnels()[0].public_url
+        if is_folder:
+            public_url += "/"  # If folder, keep it an open directory
+        else:
+            public_url += "/download"  # If file, direct to the download link
+    except IndexError:
+        public_url = "Ngrok not started!"
+
+    if is_folder:
         files = [f"/download/{file}" for file in os.listdir(selected_path)]
     else:
         files = []
-    return render_template_string(HTML_TEMPLATE, public_url=public_url, qr_code_url="/qr_code", is_folder=is_folder, files=files)
+
+    return render_template_string(
+        HTML_TEMPLATE,
+        public_url=public_url,
+        qr_code_url="/qr_code",
+        is_folder=is_folder,
+        files=files,
+    )
 
 @app.route("/download/<filename>")
 def download_from_folder(filename):
@@ -151,8 +172,9 @@ def select_file_or_folder():
 
         generate_qr_code(public_url)
 
-        # Update UI with public URL and QR code
-        url_label.configure(text=f"Public URL: {public_url}")
+        # Update UI with public URL as a clickable link
+        url_label.configure(text=f"Public URL: {public_url}", text_color="blue", cursor="hand2")
+        url_label.bind("<Button-1>", lambda e: webbrowser.open(public_url))  # Make URL clickable
 
         # Load and display the QR code
         qr_img = Image.open("qr_code.png").resize((150, 150), Image.Resampling.LANCZOS)
@@ -160,8 +182,8 @@ def select_file_or_folder():
         qr_label.configure(image=qr_image, text="")
         qr_label.image = qr_image
 
-        # Start Flask server (non-blocking)
-        root.after(100, lambda: app.run(port=5000, use_reloader=False))
+        # Run Flask in a separate thread to avoid UI freeze
+        threading.Thread(target=lambda: app.run(port=5000, use_reloader=False), daemon=True).start()
 
     # GUI Setup
     ctk.set_appearance_mode("dark")
